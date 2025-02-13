@@ -2,6 +2,8 @@ import prisma from "@/lib/prisma";
 import { NextResponse, NextRequest } from "next/server";
 import * as yup from "yup";
 
+import { getServerSessionServer } from "@/auth/actions/auth-actions";
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const take = Number(searchParams.get("take") ?? "10");
@@ -32,12 +34,20 @@ const postSchema = yup.object({
 });
 
 export async function POST(request: Request) {
+  const user = await getServerSessionServer();
+
+  if (!user) {
+    return NextResponse.json("No autorizado", { status: 401 });
+  }
+
   try {
     const { complete, description } = await postSchema.validate(
       await request.json()
     );
 
-    const todo = await prisma.todo.create({ data: { complete, description } });
+    const todo = await prisma.todo.create({
+      data: { complete, description, userId: user.id },
+    });
 
     return NextResponse.json(todo);
   } catch (error) {
@@ -46,10 +56,17 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  try {
-    await prisma.todo.deleteMany({ where: { complete: true } });
+  const user = await getServerSessionServer();
 
-    return NextResponse.json("Deleted");
+  if (!user) {
+    return NextResponse.json("No autorizado", { status: 401 });
+  }
+
+  try {
+    await prisma.todo.deleteMany({
+      where: { complete: true, userId: user.id },
+    });
+    return NextResponse.json("Borrados");
   } catch (error) {
     return NextResponse.json(error, { status: 400 });
   }
